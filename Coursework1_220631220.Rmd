@@ -1,0 +1,147 @@
+---
+title: "MTH6139 Time Series" 
+subtitle: "Coursework 1" 
+author: "Betty Smythe" 
+date: "Spring Term 2025" 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: spacelab 
+    highlight: tango
+---
+ 
+```{r, echo=FALSE}
+# This code will display the QMUL logo at the top right of the page
+# Do not change this code
+htmltools::img(src = knitr::image_uri("images/QMlogo.png"),
+               alt = 'logo',
+               style = 'position:absolute; top:0; right:0; padding:10px; width:20%;')
+```
+
+# Section 1: Project Introduction
+In my project, I will analyse the time series of weekly Google searches for my favorite artist, Lana del Rey, in the United States over the past five years. The goal of my analysis is to determine long-term trends, find seasonal patterns, and predict future Google search trends using Facebook's Prophet model.
+
+![](images/lanadelrey.photo.jpeg)
+
+
+# Section 2: Preparing the Data
+
+## 2.1 Let's Take a Look at the Lana Search Data
+To find my dataset, I searched Lana Del Rey in Google Trends, then downloaded the 'Interest over time' data as a CSV file, which is now located in my 'Data' folder. The x-column of the data represents the recorded weeks, while the y-column gives the number of Google searches. I will store this data in the variable Lana.Searches, and use the 'head' and 'summary' finctions to gain a better understanding of its general shape.
+
+```{r}
+Lana.Data = read.csv("/Users/bettysmythe/Desktop/Coursework1_220631220/data/Lana.Search.Data.csv", skip=2)
+head(Lana.Data)
+summary(Lana.Data)
+```
+
+To better understand this data before starting my analysis, I'll also look at the graph of Lana del Rey search trends given on Google Trends and plot the data in R (need to convert columns to date and numeric formats first in order to do this).
+
+![](images/googletrendsgraph.png)
+
+```{r}
+colnames(Lana.Data) = c("Week", "Searches")
+Lana.Data$Week = as.Date(Lana.Data$Week, format="%Y-%m-%d")
+Lana.Data$Searches <- as.numeric(Lana.Data$Searches)
+plot(Lana.Data$Week, Lana.Data$Searches, type="l", col="pink", xlab="Week", ylab="Searches", main="Weekly Google Searches for Lana del Rey")
+```
+
+## 2.2 Setting Up the Time Series as a Dataframe
+In order to start modelling the time series, I want to set it up as a dataframe following the coursework instructions.
+
+```{r}
+Lana.Dataframe = data.frame(
+    ds=zoo::as.Date(Lana.Data[,1]),
+    y=Lana.Data[,2])
+```
+
+
+# Section 3: The Prophet Model and Forecast
+
+## 3.1 Fitting the Prophet Model to the Dataframe
+To analyse the time series and model future trends and seasonality, I am going to fit a model to the data using Prophet. I have already installed Prophet, so I will do this using the following code.
+
+```{r}
+Prophet.Model = prophet::prophet(Lana.Dataframe)
+```
+
+## 3.2 Predicting and Plotting Future Search Values
+To forecast future Google searches for Lana del Rey two years into the future, I will first use Prophet to generate future dates, then run the 'predict()' function to predict future values and the plot() function to display a visual representation of the forecast.
+
+```{r}
+Future.Dates = prophet::make_future_dataframe(Prophet.Model, periods=104, freq="week")
+Predicted.Values = predict(Prophet.Model, Future.Dates)
+plot(Prophet.Model,Predicted.Values)
+```
+
+
+# Section 4: Analysis of Trends and Seasonality
+
+## 4.1 Plotting the Trend and Seasonality
+Now, I am going to consider the model for time series that we have used in this module:
+$$
+X_t=m_t+S_t+Y_t
+$$
+which breaks my original time series down into a trend, seasonal component, and residual error. Let's look at the plot of these components for the time series of Lana Del Rey Google Searches.
+
+```{r}
+prophet::prophet_plot_components(Prophet.Model, Predicted.Values)
+```
+
+## 4.2 Comments on the Trend
+We can see a generally upward trend 2020-2024 with slight decline after this. The Prophet Model. This makes sense to me because Lana Del Rey released her most recent album in 2023 and performed at major musical festivals in the US in August 2023 (Lollapalooza) and April 2024 (Coachella). The forecast predicts that Google searches for Lana Del Rey will continue to decline slightly in the next two years.
+
+## 4.3 Comments on the Seasonality
+Something that immediately stands out to me in the seasonality plot is this spike in Google searches in early February. I hypothesize that the spike is related to the Grammys, which occur in late January or early February each year. To further examine this phenomenon, I would like to run a holiday analysis, which I will carry out in Subsection 4.4.
+It is also worth noting that there tends to be slightly more search interest for Lana Del Rey during the summer months, with some fluctuation, of course, but with less search interest during the winter months (November-March). This makes sense to me because Lana Del Rey is known to write songs about summertime or mentioning summertime, such as "Summer Bummer", "Salvatore", and "Young and Beautiful", and I personally listen to more of her music during the warmer months.
+
+## 4.4 Holiday Analysis: Grammys, Album Releases, and Coachella 2023
+In my analysis of the trend and seasonality component for this time series, I noticed that Google searches for Lana Del Rey increased while she was releasing albums and performing at major music festivals and tended to spike around early February, which is when the Grammys are. I hypothesize that each of these events correlate to an increase in search interest for Lana Del Rey. To evaluate this, I will run a holiday analysis, starting by creating a dataframe of dates for each category of "holiday" (Grammys, releases of albums, Did You Know That There's a Tunnel Under Ocean Boulevard, Blue Banisters, and Chemtrails Over the Country Club, and major festivals, Lollapalooza and Coachella).
+
+```{r}
+Grammys = data.frame(
+    holiday="Grammys",
+    ds=as.Date(c("2020-01-26","2021-03-14","2022-04-03","2023-02-05", "2024-02-04","2025-02-02")),
+    lower_window=0,
+    upper_window=0
+)
+
+Albums = data.frame(
+    holiday="Albums",
+    ds=as.Date(c("2023-03-24","2021-10-22","2021-03-19")),
+    lower_window=0,
+    upper_window=0
+)
+
+Festivals = data.frame(
+    holiday="Festivals",
+    ds=as.Date(c("2023-08-06","2024-04-12")),
+    lower_window=0,
+    upper_window=0
+)
+
+library(dplyr)
+holidays = bind_rows(Grammys, Albums, Festivals)
+```
+
+Now, I can use Prophet to fit a new model with not only a trend and seasonality component, but also a holiday component. 
+
+```{r}
+Fitted.Model = prophet::prophet(Lana.Dataframe, holidays=holidays, interval.width=1)
+
+Forecast = predict(Fitted.Model, Future.Dates)
+
+prophet::prophet_plot_components(Fitted.Model, Forecast)
+
+```
+
+In the plot of the holiday component, I do see large spikes around March/April 2021 and 2022 as well as February 2023, 2024, and 2025, which suggests that the Grammys do, in fact, positively influence search interest for Lana Del Rey. The one other spike I see is in summer 2023, which coordinates to Lana Del Rey's Lollapalooza performance (which is I think is really cool because I was there!). This is interesting because there is no spike coordinating to her Coachella performance in 2024, which I would have expected to have the same, if not more, influence on search interest, as it is a bigger festival. However, the Lollapalooza performance was Lana's first major music fesitval performance in the US in a very long time, so this could be the reason for this difference. Additionally, according to the holiday plot, Lana Del Rey's album releases have a low impact on Google searches.
+
+![](images/lanagrammys.jpeg)
+
+
+# Section 5: Project Conclusion
+My time series analysis of weekly Google search interest for Lana Del Rey in the United States over the past five years suggests an upward trend in search popularity from 2020-2024, with a slight decline in the following years, as well a strong seasonality component associated with the timing of the Grammy awards, which was very interesting to see. 
+The Prophet model predicts that the slightly negative trend in Google search interest for Lana Del Rey will continue in the next two years based on the data from the past two years. I think this will prove to be an accurate forecast if Lana Del Rey continues to delay the release of her next album and does not perform at more major music festivals in these next two years.
+This project showed me that time series analysis can be a useful tool for understanding phenomena that I am interested in -- in this case, the Google search interest my favorite artist, which acts as an indicator of her overall popularity over time. I enjoyed using concepts that I have studied in my Time Series module to analyse this issue that I care about!
